@@ -4,6 +4,7 @@ import random
 import time
 from google import genai
 from google.genai import errors
+from sprint3 import DEFINICOES, C_USOS, P_USOS, UNIVERSO_DU, MUTANTES, analisar_du, analisar_mutacao
 from caixa_branca import (
     NOS, ARESTAS, DECISOES, CASOS, Caso, executar,
     esperado_especificacao, cobertura, diagrama,
@@ -84,7 +85,7 @@ def exibir_erro_gemini(erro):
 
 # 1. Configuração da Página Web
 st.set_page_config(
-    page_title='TestingStudio Web - Sprints 1 e 2',
+    page_title='TestingStudio Web - Sprints 1, 2 e 3',
     page_icon='🧪',
     layout='wide'
 )
@@ -137,7 +138,9 @@ codigo = st.text_area(
     height=220
 )
 
-aba_preta, aba_branca = st.tabs(['Sprint 1 · Caixa-Preta', 'Sprint 2 · Caixa-Branca'])
+aba_preta, aba_branca, aba_dados = st.tabs([
+    'Sprint 1 · Caixa-Preta', 'Sprint 2 · Caixa-Branca', 'Sprint 3 · Dados e Mutantes',
+])
 
 with aba_preta:
     # 4. Botão de Auditoria e Integração com Gemini
@@ -343,3 +346,112 @@ with aba_branca:
                 'O cálculo não simula overflow ou arredondamento do resultado pelo runtime 4GL. '
                 'A cobertura apresentada vale para este modelo fixo do CAD0001, não para fontes arbitrários.'
             )
+
+with aba_dados:
+    st.header('Fluxo de dados e testes de mutação')
+    st.caption('Análise local do mesmo modelo Python do CAD0001 padrão, sem chamadas ao Gemini.')
+    if codigo.strip() != cad_default.strip():
+        st.warning('Restaure o fonte padrão para executar a Sprint 3. O modelo não analisa fontes alterados.')
+    else:
+        usar_suite_branca = st.checkbox('Usar a suíte selecionada na Sprint 2, incluindo casos próprios', value=True, key='s3_reusar')
+        if usar_suite_branca:
+            casos_s3 = suite
+            st.caption('Alterações nos casos da Sprint 2 atualizam os resultados abaixo automaticamente.')
+        else:
+            ids_s3 = st.multiselect(
+                'Casos para a Sprint 3', options=[c.id for c in CASOS],
+                default=[c.id for c in CASOS if c.basico],
+                format_func=lambda id: f'{id} · {por_id[id].descricao}', key='suite_s3',
+            )
+            casos_s3 = [por_id[id] for id in ids_s3]
+        st.caption(f'Casos em execução: {len(casos_s3)}. ' + (', '.join(c.id for c in casos_s3) or 'Nenhum selecionado.'))
+        dados_tab, mutantes_tab = st.tabs(['Definição–uso (DU)', 'Mutantes e escore'])
+        with dados_tab:
+            st.markdown(
+                '**Definição (d):** atribuição de um valor à variável. '
+                '**c-uso:** uso em cálculo, atribuição ou retorno. '
+                '**p-uso:** uso em decisão, identificado pela aresta percorrida. '
+                'Um par DU liga a definição ao uso sem outra definição da mesma variável no caminho.'
+            )
+            du_casos = analisar_du(casos_s3)
+            cobertos = sum(bool(ids) for ids in du_casos.values())
+            cols_du = st.columns(3)
+            cols_du[0].metric('Pares DU factíveis', len(UNIVERSO_DU))
+            cols_du[1].metric('Pares DU cobertos', cobertos)
+            cols_du[2].metric('Cobertura de pares DU', f'{100 * cobertos / len(UNIVERSO_DU):.1f}%')
+            st.caption(
+                'Critério: todos os pares DU factíveis deste modelo, com p-usos nas arestas. '
+                'O universo é obtido pelas 27 combinações de NULL, negativo e não negativo; '
+                'essas classes determinam todas as decisões do CAD0001. Não é cobertura de todos os caminhos DU.'
+            )
+            tabela_du = pd.DataFrame([
+                {'Variável': par.variavel, 'Definição': par.definicao, 'Uso': par.uso,
+                 'Tipo': par.tipo, 'Coberto': bool(ids), 'Casos que cobrem': ', '.join(ids) or '—'}
+                for par, ids in du_casos.items()
+            ])
+            st.dataframe(tabela_du, hide_index=True, alt='Pares definição–uso factíveis e testes que os exercitam')
+            st.download_button('Baixar cobertura DU', tabela_du.to_csv(index=False).encode('utf-8-sig'), 'cad0001_pares_du.csv', 'text/csv')
+            st.info(
+                'Após p_val receber zero em N2, N5 ou N8, o ramo verdadeiro de p_val < 0 é impossível. '
+                'Esses três pares infactíveis ficam fora do denominador. As entradas val_param são definidas em INICIO.'
+            )
+            if casos_s3:
+                caso_du_id = st.selectbox('Acompanhar variáveis de um caso', [c.id for c in casos_s3], key='s3_caso_du')
+                caso_du = next(c for c in casos_s3 if c.id == caso_du_id)
+                resultado_du, caminho_du = executar(caso_du.entradas)
+                st.caption('Entradas: ' + ', '.join('NULL' if v is None else str(v) for v in caso_du.entradas))
+                st.code(' → '.join(caminho_du), language=None)
+                eventos = []
+                for indice, no in enumerate(caminho_du):
+                    eventos.append({
+                        'Passo': indice + 1, 'Nó': no,
+                        'Definições': ', '.join(DEFINICOES.get(no, ())) or '—',
+                        'c-usos': ', '.join(C_USOS.get(no, ())) or '—',
+                        'p-uso na aresta': (f'{P_USOS[no]}: {no} → {caminho_du[indice + 1]}' if no in P_USOS else '—'),
+                    })
+                st.dataframe(pd.DataFrame(eventos), hide_index=True, alt='Sequência de definições e usos no caso selecionado')
+                st.caption(f'Resultado da versão Python: {resultado_du:.2f}. Em N14, os operandos são usados antes de definir resultado.')
+
+        with mutantes_tab:
+            st.markdown(
+                'Cada mutante contém **uma alteração controlada**. Ele é **morto** quando algum caso produz '
+                'uma saída diferente da versão original; é **sobrevivente** quando nenhum caso selecionado detecta a mudança. '
+                'Sobreviver não comprova equivalência.'
+            )
+            st.info(
+                'Aqui o oráculo é o comportamento original, incluindo NULL → 0. '
+                'O PASS/FAIL de requisito da Sprint 2 é uma avaliação separada. '
+                'Um escore alto não corrige a divergência de NULL nem comprova que o programa atende à especificação.'
+            )
+            resumo_mutantes, matriz_mutantes, escore = analisar_mutacao(casos_s3)
+            mortos = sum(r['Situação'] == 'Morto' for r in resumo_mutantes)
+            sobreviventes = sum(r['Situação'] == 'Sobrevivente' for r in resumo_mutantes)
+            equivalentes = sum(bool(m.equivalente) for m in MUTANTES)
+            cols_mut = st.columns(4)
+            cols_mut[0].metric('Mutantes mortos', mortos)
+            cols_mut[1].metric('Sobreviventes', sobreviventes)
+            cols_mut[2].metric('Equivalentes comprovados', equivalentes)
+            cols_mut[3].metric('Escore de mutação', '—' if escore is None else f'{escore:.1f}%')
+            st.caption(
+                f'Escore = mortos / (total − equivalentes) × 100 = mortos / ({len(MUTANTES)} − {equivalentes}) × 100. '
+                'Sem casos selecionados, o escore fica indefinido e os mutantes não equivalentes ficam como não executados.'
+            )
+            tabela_mutantes = pd.DataFrame(resumo_mutantes)
+            st.dataframe(tabela_mutantes, hide_index=True, alt='Alterações dos dez mutantes e resultados de sua execução')
+            st.download_button('Baixar resumo dos mutantes', tabela_mutantes.to_csv(index=False).encode('utf-8-sig'), 'cad0001_mutantes.csv', 'text/csv')
+            st.caption(
+                'ROR: operador relacional; AOR: aritmético; COR: conector lógico; LVR: valor literal. '
+                'M09 é equivalente pela comutatividade da multiplicação no domínio Decimal deste modelo, '
+                'independentemente dos resultados da suíte.'
+            )
+            if matriz_mutantes:
+                detalhe_id = st.selectbox('Ver resultados de um mutante', [m.id for m in MUTANTES], key='s3_mutante')
+                detalhe = pd.DataFrame([r for r in matriz_mutantes if r['Mutante'] == detalhe_id])
+                st.dataframe(detalhe, hide_index=True, alt='Comparação de saídas do mutante selecionado com a versão original')
+                st.download_button('Baixar matriz completa de execução', pd.DataFrame(matriz_mutantes).to_csv(index=False).encode('utf-8-sig'), 'cad0001_matriz_mutacao.csv', 'text/csv')
+            if sobreviventes:
+                st.markdown(
+                    '**Como reforçar a suíte:** CT08 (todos zero) detecta M01/M02/M03; '
+                    'CT01 detecta M04/M05/M10; CT05 detecta M06/M08; CT02 detecta M07. '
+                    'Selecione esses casos e observe quais sobreviventes são mortos.'
+                )

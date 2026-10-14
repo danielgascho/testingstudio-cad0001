@@ -1,9 +1,10 @@
 # TestingStudio Web — CAD0001
 
-Aplicação da disciplina Teste de Software I com duas sprints implementadas:
+Aplicação da disciplina Teste de Software I com três sprints implementadas:
 
 - **Sprint 1 — Caixa-Preta:** relatório Gemini com PCE, AVL e divergência de NULL, além dos pontos de fronteira.
 - **Sprint 2 — Caixa-Branca:** execução local de uma versão equivalente em Python, grafo, caminhos, McCabe e cobertura.
+- **Sprint 3 — Fluxo de Dados e Mutação:** pares DU, sequência de definições/usos, dez mutantes e escore de mutação.
 
 ## Executar
 
@@ -37,10 +38,24 @@ Entradas usam Decimal, até duas casas decimais e o intervalo de DECIMAL(12,2). 
 
 O relatório de Caixa-Preta é análise gerada pelo Gemini; seus resultados não são execução nativa de testes do CAD0001. Ele fica preservado na sessão ao interagir com a Sprint 2 e só é mostrado para o fonte correspondente.
 
+## Como demonstrar a Sprint 3
+
+1. Abra **Sprint 3 · Dados e Mutantes**. Por padrão, a análise reutiliza os casos selecionados na Sprint 2, incluindo os personalizados. Desmarque essa opção para montar uma seleção independente entre os 13 casos existentes.
+2. Em **Definição–uso (DU)**, veja as definições, c-usos nos nós e p-usos nas arestas. Cada uso está ligado à última definição da variável, sem redefinição intermediária. Escolha um caso para acompanhar a sequência de eventos.
+3. O universo contém 25 pares factíveis: as decisões dependem exclusivamente das classes NULL/negativo/não negativo, portanto as 27 combinações de representantes cobrem todos os fluxos possíveis. Os pares de uma atribuição de zero até o ramo verdadeiro de `< 0` são impossíveis e excluídos. O critério é todos os pares DU factíveis; não todos os caminhos DU.
+4. Em **Mutantes e escore**, examine as dez alterações e as saídas de cada caso contra o original. Há três mutantes relacionais (ROR), dois aritméticos (AOR), um conector lógico (COR), dois literais (LVR), uma permutação equivalente e uma remoção de termo.
+5. Os sete casos básicos cobrem os 25 pares e matam os nove mutantes não equivalentes. M09 apenas inverte os fatores da multiplicação e é equivalente por comutatividade no domínio deste modelo. O escore é `mortos / (total − equivalentes) × 100`.
+6. Selecione somente CT01: cobre 13 pares DU, mata três mutantes e obtém escore 33,3%. Os demais sobreviventes não são automaticamente equivalentes. Adicione testes de zero, negativos e NULL e observe as mudanças.
+7. Sem casos, a cobertura DU é zero, nove mutantes aparecem como não executados e o escore fica indefinido. Os CSVs permitem baixar cobertura DU, resumo de mutantes e matriz de resultados.
+
+A mutação usa comparação de saídas com o comportamento original (incluindo NULL→0). Esse oráculo mede a sensibilidade dos casos às alterações, separadamente da conformidade com o requisito, exibida na Sprint 2. Um mutante pode produzir uma saída diferente e ser morto sem que o original cumpra a especificação. Sobrevivência sozinha não prova equivalência.
+
 ## Testes
 
 ```powershell
-python -m unittest -v test_caixa_branca test_interface
+python -m unittest -v test_caixa_branca test_sprint3 test_interface
 ```
 
 Os testes verificam 125 combinações contra uma referência matemática, consistência dos caminhos, curto-circuito, independência dos caminhos básicos, cobertura completa, divergência de NULL, validação de entradas e interações da interface. As chamadas ao Gemini nos testes são simuladas.
+
+Os testes da Sprint 3 também verificam o universo DU contra 216 combinações, as saídas conhecidas de cada mutante, o equivalente em 125 combinações (incluindo limites de entrada), o escore, suíte vazia e a seleção compartilhada/independente na interface.

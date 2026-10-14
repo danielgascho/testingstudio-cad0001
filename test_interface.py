@@ -8,7 +8,7 @@ class InterfaceTests(unittest.TestCase):
     def test_cobertura_e_casos(self):
         app = AppTest.from_file('app.py', default_timeout=15).run()
         self.assertFalse(app.exception)
-        self.assertEqual([m.value for m in app.metric], ['7', '7', '100.0%', '100.0%'])
+        self.assertEqual([m.value for m in app.metric][:4], ['7', '7', '100.0%', '100.0%'])
         app.multiselect(key='suite_branca').set_value(['CT01']).run()
         self.assertFalse(app.exception)
         self.assertEqual(app.metric[1].value, '1')
@@ -22,7 +22,7 @@ class InterfaceTests(unittest.TestCase):
         app.multiselect(key='suite_branca').set_value([]).run()
         next(b for b in app.button if b.label == 'Limpar casos próprios').click().run()
         self.assertFalse(app.exception)
-        self.assertEqual([m.value for m in app.metric][1:], ['0', '0.0%', '0.0%'])
+        self.assertEqual([m.value for m in app.metric][1:4], ['0', '0.0%', '0.0%'])
         app.text_area[0].set_value('fonte diferente').run()
         self.assertFalse(app.exception)
         self.assertFalse(app.metric)
@@ -39,6 +39,26 @@ class InterfaceTests(unittest.TestCase):
             app.multiselect(key='suite_branca').set_value(['CT01']).run()
             self.assertTrue(any(m.value == resp.text for m in app.markdown))
             self.assertEqual(cliente.call_count, 1)
+
+    def test_sprint3_suite_compartilhada_e_independente(self):
+        app = AppTest.from_file('app.py', default_timeout=15).run()
+        self.assertFalse(app.exception)
+        self.assertEqual([m.value for m in app.metric][4:], ['25', '25', '100.0%', '9', '0', '1', '100.0%'])
+        app.multiselect(key='suite_branca').set_value(['CT01']).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.metric[-1].value, '33.3%')
+        self.assertEqual(app.metric[5].value, '13')
+        app.selectbox(key='s3_mutante').select('M09').run()
+        self.assertFalse(app.exception)
+        app.multiselect(key='suite_branca').set_value([]).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.metric[-1].value, '—')
+        app.checkbox(key='s3_reusar').uncheck().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.metric[-1].value, '100.0%')
+        app.multiselect(key='suite_s3').set_value(['CT08']).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.metric[-1].value, '33.3%')
 
 
 if __name__ == '__main__':
