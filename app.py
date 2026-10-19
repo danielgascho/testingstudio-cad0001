@@ -5,6 +5,7 @@ import time
 from google import genai
 from google.genai import errors
 from sprint3 import DEFINICOES, C_USOS, P_USOS, UNIVERSO_DU, MUTANTES, analisar_du, analisar_mutacao
+from sprint4 import REQUISITOS, validar, pitch, relatorio as gerar_relatorio
 from caixa_branca import (
     NOS, ARESTAS, DECISOES, CASOS, Caso, executar,
     esperado_especificacao, cobertura, diagrama,
@@ -85,7 +86,7 @@ def exibir_erro_gemini(erro):
 
 # 1. Configuração da Página Web
 st.set_page_config(
-    page_title='TestingStudio Web - Sprints 1, 2 e 3',
+    page_title='TestingStudio Web - Sprints 1 a 4',
     page_icon='🧪',
     layout='wide'
 )
@@ -138,8 +139,9 @@ codigo = st.text_area(
     height=220
 )
 
-aba_preta, aba_branca, aba_dados = st.tabs([
+aba_preta, aba_branca, aba_dados, aba_validacao = st.tabs([
     'Sprint 1 · Caixa-Preta', 'Sprint 2 · Caixa-Branca', 'Sprint 3 · Dados e Mutantes',
+    'Sprint 4 · Pitch e Validação',
 ])
 
 with aba_preta:
@@ -455,3 +457,74 @@ with aba_dados:
                     'CT01 detecta M04/M05/M10; CT05 detecta M06/M08; CT02 detecta M07. '
                     'Selecione esses casos e observe quais sobreviventes são mortos.'
                 )
+
+with aba_validacao:
+    st.header('Pitch e validação do CAD0001')
+    st.caption('Rastreabilidade e evidências de execução do modelo Python. A validação funcional compara o resultado com a especificação.')
+    if codigo.strip() != cad_default.strip():
+        st.warning('Restaure o fonte padrão para usar a validação. A RTM e os testes correspondem ao CAD0001 padrão.')
+    else:
+        reutilizar_s4 = st.checkbox('Validar usando a suíte atual da Sprint 2', value=False, key='s4_reusar')
+        if reutilizar_s4:
+            casos_s4 = suite
+            st.caption('Inclui os casos próprios adicionados na Sprint 2. Casos do plano não selecionados permanecem pendentes.')
+        else:
+            ids_s4 = st.multiselect(
+                'Plano de validação', options=[c.id for c in CASOS], default=[c.id for c in CASOS],
+                format_func=lambda id: f'{id} · {por_id[id].descricao}', key='suite_s4',
+            )
+            casos_s4 = [por_id[id] for id in ids_s4]
+        validacao = validar(casos_s4)
+        resumo_tab, rtm_tab, pitch_tab = st.tabs(['Resultado da validação', 'Matriz RTM', 'Pitch e demonstração'])
+        with resumo_tab:
+            if validacao['fail']:
+                st.error('CAD0001: ' + validacao['veredito'] + '. Há divergências entre requisito e implementação.')
+            elif validacao['pendentes']:
+                st.warning('CAD0001: validação incompleta. Ainda existem casos do plano sem execução.')
+            else:
+                st.success('CAD0001: aprovado nos casos do plano executado.')
+            cards_s4 = st.columns(4)
+            cards_s4[0].metric('Casos de validação executados', validacao['executados'])
+            cards_s4[1].metric('PASS na validação', validacao['pass'])
+            cards_s4[2].metric('FAIL na validação', validacao['fail'])
+            cards_s4[3].metric('Casos pendentes no plano', validacao['pendentes'])
+            st.markdown(
+                f"**Coberturas desta seleção:** nós {validacao['cobertura_nos']:.1f}%, "
+                f"arestas {validacao['cobertura_arestas']:.1f}% e pares DU {validacao['cobertura_du']:.1f}%. "
+                'Escore de mutação: ' + ('indefinido.' if validacao['escore_mutacao'] is None else f"{validacao['escore_mutacao']:.1f}%.")
+            )
+            st.info(
+                'Cobertura de código, cobertura DU e escore de mutação não substituem validação funcional. '
+                'A conversão NULL → 0 foi preservada para evidenciar a divergência do REQ-CAD04.'
+            )
+            tabela_validacao = pd.DataFrame(validacao['testes'])
+            st.dataframe(tabela_validacao, hide_index=True, alt='Resultados funcionais e fluxos dos casos do plano de validação')
+            st.download_button('Baixar evidências da validação (CSV)', tabela_validacao.to_csv(index=False).encode('utf-8-sig'), 'cad0001_validacao.csv', 'text/csv')
+            st.download_button('Baixar relatório final (Markdown)', gerar_relatorio(validacao), 'cad0001_relatorio_final.md', 'text/markdown')
+            with st.expander('Como interpretar o resultado e os limites'):
+                st.markdown(
+                    'O plano base tem 13 casos. Um caso ausente fica **não executado**. '
+                    'Um requisito só recebe **aprovado no plano** quando todos os seus casos planejados passam. '
+                    'Havendo FAIL, ele é reprovado; com apenas parte dos casos aprovados, fica parcial. '
+                    'A classificação dos fluxos segue o requisito: entradas válidas no fluxo principal, zero como limite '
+                    'e negativos/NULL como exceções. Os REQ-CAD foram definidos neste projeto para organizar as regras. '
+                    'A execução é do modelo Python, sem compilar 4GL ou simular overflow. '
+                    'O relatório Gemini é uma análise textual separada. A aprovação limita-se ao plano executado.'
+                )
+        with rtm_tab:
+            st.markdown(
+                '**Rastreabilidade bidirecional:** do requisito para seus testes e de cada teste para os requisitos que verifica. '
+                'Um vínculo indica que existe um teste associado; o resultado da execução determina sua situação.'
+            )
+            rtm_cols = st.columns(2)
+            rtm_cols[0].metric('Requisitos com teste executado', f"{validacao['requisitos_vinculados']}/{len(REQUISITOS)}")
+            rtm_cols[1].metric('Requisitos aprovados no plano', f"{validacao['requisitos_aprovados']}/{len(REQUISITOS)}")
+            tabela_rtm = pd.DataFrame(validacao['matriz'])
+            st.dataframe(tabela_rtm, hide_index=True, alt='Matriz requisito para testes com aprovação, falhas e pendências')
+            st.dataframe(tabela_validacao[['Caso', 'Fluxo', 'Requisitos', 'Situação']], hide_index=True, alt='Rastreabilidade reversa de cada caso aos seus requisitos')
+            st.caption('Casos sem requisito associado: ' + (', '.join(validacao['orfaos']) if validacao['orfaos'] else 'nenhum no plano atual.'))
+            st.download_button('Baixar matriz RTM (CSV)', tabela_rtm.to_csv(index=False).encode('utf-8-sig'), 'cad0001_rtm.csv', 'text/csv')
+        with pitch_tab:
+            st.markdown(pitch(validacao))
+            st.download_button('Baixar roteiro do pitch', pitch(validacao), 'testingstudio_pitch.md', 'text/markdown')
+            st.caption('Roteiro de aproximadamente 3 minutos. Os números acompanham a seleção da Sprint 4; execute os casos citados para demonstrar suas evidências.')

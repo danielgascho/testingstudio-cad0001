@@ -1,10 +1,11 @@
 # TestingStudio Web — CAD0001
 
-Aplicação da disciplina Teste de Software I com três sprints implementadas:
+Aplicação da disciplina Teste de Software I com quatro sprints implementadas:
 
 - **Sprint 1 — Caixa-Preta:** relatório Gemini com PCE, AVL e divergência de NULL, além dos pontos de fronteira.
 - **Sprint 2 — Caixa-Branca:** execução local de uma versão equivalente em Python, grafo, caminhos, McCabe e cobertura.
 - **Sprint 3 — Fluxo de Dados e Mutação:** pares DU, sequência de definições/usos, dez mutantes e escore de mutação.
+- **Sprint 4 — Pitch e Validação:** matriz RTM bidirecional, validação funcional, evidências e roteiro de apresentação.
 
 ## Executar
 
@@ -50,12 +51,26 @@ O relatório de Caixa-Preta é análise gerada pelo Gemini; seus resultados não
 
 A mutação usa comparação de saídas com o comportamento original (incluindo NULL→0). Esse oráculo mede a sensibilidade dos casos às alterações, separadamente da conformidade com o requisito, exibida na Sprint 2. Um mutante pode produzir uma saída diferente e ser morto sem que o original cumpra a especificação. Sobrevivência sozinha não prova equivalência.
 
+## Como demonstrar a Sprint 4
+
+1. Abra **Sprint 4 · Pitch e Validação**. Por padrão, os 13 casos do plano são executados. É possível escolher um subconjunto ou reutilizar a seleção da Sprint 2 com casos próprios.
+2. O resultado inicial é **9 PASS, 4 FAIL e nenhum caso pendente**. O CAD0001 é reprovado no plano por converter NULL em zero em vez de rejeitá-lo. A ferramenta está evidenciando uma falha do programa auditado.
+3. Na **Matriz RTM**, confira quatro requisitos definidos para este projeto: cálculo, zero válido, rejeição dos negativos e rejeição de NULL. A tabela reversa mostra os requisitos associados a cada teste e seu tipo de fluxo (principal, alternativo/limite ou exceção).
+4. Os quatro requisitos possuem testes executados, mas somente três são aprovados no plano. Requisito com caso FAIL é reprovado; com execução incompleta e sem FAIL fica parcial; sem caso executado fica sem execução. Ter um vínculo na matriz não significa aprovação.
+5. Remova um caso e observe as pendências. Selecionar apenas os casos que passam não aprova o plano: os demais ficam explicitamente não executados. A aprovação de cada requisito exige que todos os seus casos planejados sejam executados e passem.
+6. Baixe a RTM e as evidências em CSV e o relatório final em Markdown. Os números refletem a seleção atual, incluindo a cobertura estrutural, DU e mutação dessa mesma seleção.
+7. Em **Pitch e demonstração**, use o roteiro de aproximadamente três minutos, com problema, solução, demonstração, resultados e limites. O roteiro também pode ser baixado em Markdown.
+
+A RTM aplica ao CAD0001 os conceitos de derivação de casos e rastreabilidade da aula de 14/10/2026. Os identificadores REQ-CAD são uma organização das regras neste projeto. O plano é limitado aos casos cadastrados e não constitui teste exaustivo ou validação do runtime 4GL. A divergência de NULL permanece preservada; esta sprint documenta o resultado, sem alterar o programa objeto de estudo.
+
 ## Testes
 
 ```powershell
-python -m unittest -v test_caixa_branca test_sprint3 test_interface
+python -m unittest -v test_caixa_branca test_sprint3 test_sprint4 test_interface
 ```
 
 Os testes verificam 125 combinações contra uma referência matemática, consistência dos caminhos, curto-circuito, independência dos caminhos básicos, cobertura completa, divergência de NULL, validação de entradas e interações da interface. As chamadas ao Gemini nos testes são simuladas.
 
 Os testes da Sprint 3 também verificam o universo DU contra 216 combinações, as saídas conhecidas de cada mutante, o equivalente em 125 combinações (incluindo limites de entrada), o escore, suíte vazia e a seleção compartilhada/independente na interface.
+
+Os testes da Sprint 4 verificam RTM nos dois sentidos, classificação dos fluxos, reprovação de NULL mesmo com cobertura alta, pendências, suíte vazia, casos próprios, relatórios, roteiro e interações da interface. A suíte completa tem 20 testes automatizados.
