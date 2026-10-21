@@ -1,76 +1,82 @@
 # TestingStudio Web — CAD0001
 
-Aplicação da disciplina Teste de Software I com quatro sprints implementadas:
-
-- **Sprint 1 — Caixa-Preta:** relatório Gemini com PCE, AVL e divergência de NULL, além dos pontos de fronteira.
-- **Sprint 2 — Caixa-Branca:** execução local de uma versão equivalente em Python, grafo, caminhos, McCabe e cobertura.
-- **Sprint 3 — Fluxo de Dados e Mutação:** pares DU, sequência de definições/usos, dez mutantes e escore de mutação.
-- **Sprint 4 — Pitch e Validação:** matriz RTM bidirecional, validação funcional, evidências e roteiro de apresentação.
+Ferramenta educacional de auditoria com quatro sprints. O objeto ativo é o **arquivo completo original `cad0001_item_calculo.txt`**, lido da pasta do projeto. Seus defeitos são preservados para que a auditoria os revele.
 
 ## Executar
 
-Na pasta do projeto, com Python e as dependências instaladas:
+Com Python e as dependências instaladas, na pasta do projeto:
 
 ```powershell
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-A aba de Caixa-Branca funciona sem API Key. A Caixa-Preta precisa de uma chave do Google AI Studio. Erros temporários 500/502/503/504 têm até quatro tentativas com intervalos crescentes; autenticação e cota recebem mensagens próprias.
+Acesse http://localhost:8501. As quatro sprints funcionam localmente sem API Key. O comentário opcional do Gemini requer uma chave do Google AI Studio. Erros temporários 500/502/503/504 têm até quatro tentativas; autenticação e cota recebem mensagens próprias. O comentário da IA não altera os resultados locais.
 
-## Como demonstrar a Sprint 2
+## O que a revisão corrigiu
 
-1. Abra **Sprint 2 · Caixa-Branca** com o fonte padrão.
-2. Os sete casos básicos executam todos os nós e todas as arestas.
-3. Selecione somente CT01 para observar a redução da cobertura.
-4. Destaque CT05 no grafo: o primeiro negativo termina em RETURN -1, sem visitar N11 e N12.
-5. Destaque CT02: NULL vira zero e o cálculo prossegue. A saída diverge do requisito, portanto o caso é FAIL, apesar de contribuir para a cobertura.
-6. Adicione um caso próprio com números ou NULL e baixe o CSV dos resultados.
+O exemplo simplificado do manual contém uma guarda de negativos que não existe no original completo. O aplicativo usava esse exemplo e, por isso, suas métricas não representavam o arquivo enviado. Agora todas as sprints usam um modelo explícito da função original, com nome do arquivo, SHA-256 e origem da evidência nos relatórios.
 
-O grafo tem 17 nós, 22 arestas e 6 decisões binárias: `V(G) = 22 − 17 + 2 = 6 + 1 = 7`. Inclui os nós especiais de entrada e saída. O OR é representado com curto-circuito da esquerda para a direita, conforme o modelo Python. Se a condição composta fosse um único nó, a complexidade seria 5: as duas contagens correspondem a convenções diferentes de representação.
+O original converte NULL em zero e calcula com negativos. Pela regra do manual, negativos devem retornar -1 e NULL pertence à classe inválida. O projeto adota -1 também para rejeitar NULL, como critério explícito: o manual não estabelece literalmente esse retorno para NULL. O esperado é mantido separado do comportamento implementado.
 
-Os sete caminhos básicos são independentes, mas não representam todos os caminhos possíveis. McCabe não garante ausência de defeitos nem determina universalmente a quantidade mínima de testes para cobertura de arestas.
+`codigo_fonte.txt` é mantido apenas como referência histórica do exemplo simplificado do manual; não é carregado nem executado pela aplicação. O fonte ativo é `cad0001_item_calculo.txt`.
 
-## Limites
+## Sprint 1 — PCE e AVL
 
-A aplicação não executa nem compila 4GL. A execução instrumentada preserva a fórmula, a rejeição dos negativos e a conversão NULL→0 do CAD0001 padrão. As porcentagens medem esse modelo equivalente. Se o fonte editável mudar, a análise estrutural fica bloqueada para evitar associar um grafo antigo a código diferente.
+- Exibe o fonte completo, as classes de equivalência de cada parâmetro e os limites do tipo.
+- Calcula ε pela escala declarada: DECIMAL(12,2) → ε = 10⁻² = 0,01.
+- Mostra On 0,00, Off -0,01, Interior 100,00 e Exterior -100,00; acrescenta +0,01 como vizinho válido.
+- Executa os **19 casos do modelo Python**, com **8 PASS e 11 FAIL**. Zero e +ε são isolados em cada parâmetro; NULL é uma classe separada.
+- Exporta as evidências com a versão do objeto. A análise opcional Gemini é identificada como comentário textual, sem execução 4GL.
 
-Entradas usam Decimal, até duas casas decimais e o intervalo de DECIMAL(12,2). Não há simulação do overflow ou arredondamento do resultado no runtime 4GL. O oráculo do requisito rejeita NULL; o comportamento implementado o aceita como zero. 100% de cobertura pode coexistir com FAIL de requisito.
+Exemplos: `(100,100,100)` retorna 10100 e passa; `(-0.01,100,100)` retorna 99 em vez de -1 e falha; `(NULL,100,100)` retorna 100 em vez da rejeição e falha. PASS significa atender ao esperado, inclusive ao rejeitar uma entrada inválida.
 
-O relatório de Caixa-Preta é análise gerada pelo Gemini; seus resultados não são execução nativa de testes do CAD0001. Ele fica preservado na sessão ao interagir com a Sprint 2 e só é mostrado para o fonte correspondente.
+Os 19 casos não são a tabela anterior da imagem: os primeiros 13 preservam os cenários do catálogo local e há seis complementos de AVL. CT10 usa (-1,-1,-1), cujo resultado 0 é representável; três valores -0,01 exigiriam validar arredondamento no runtime.
 
-## Como demonstrar a Sprint 3
+## Sprint 2 — Caixa branca
 
-1. Abra **Sprint 3 · Dados e Mutantes**. Por padrão, a análise reutiliza os casos selecionados na Sprint 2, incluindo os personalizados. Desmarque essa opção para montar uma seleção independente entre os 13 casos existentes.
-2. Em **Definição–uso (DU)**, veja as definições, c-usos nos nós e p-usos nas arestas. Cada uso está ligado à última definição da variável, sem redefinição intermediária. Escolha um caso para acompanhar a sequência de eventos.
-3. O universo contém 25 pares factíveis: as decisões dependem exclusivamente das classes NULL/negativo/não negativo, portanto as 27 combinações de representantes cobrem todos os fluxos possíveis. Os pares de uma atribuição de zero até o ramo verdadeiro de `< 0` são impossíveis e excluídos. O critério é todos os pares DU factíveis; não todos os caminhos DU.
-4. Em **Mutantes e escore**, examine as dez alterações e as saídas de cada caso contra o original. Há três mutantes relacionais (ROR), dois aritméticos (AOR), um conector lógico (COR), dois literais (LVR), uma permutação equivalente e uma remoção de termo.
-5. Os sete casos básicos cobrem os 25 pares e matam os nove mutantes não equivalentes. M09 apenas inverte os fatores da multiplicação e é equivalente por comutatividade no domínio deste modelo. O escore é `mortos / (total − equivalentes) × 100`.
-6. Selecione somente CT01: cobre 13 pares DU, mata três mutantes e obtém escore 33,3%. Os demais sobreviventes não são automaticamente equivalentes. Adicione testes de zero, negativos e NULL e observe as mudanças.
-7. Sem casos, a cobertura DU é zero, nove mutantes aparecem como não executados e o escore fica indefinido. Os CSVs permitem baixar cobertura DU, resumo de mutantes e matriz de resultados.
+Grafo da função `cad0001_calcula_valor`, com três decisões de NULL, 10 nós e 12 arestas:
 
-A mutação usa comparação de saídas com o comportamento original (incluindo NULL→0). Esse oráculo mede a sensibilidade dos casos às alterações, separadamente da conformidade com o requisito, exibida na Sprint 2. Um mutante pode produzir uma saída diferente e ser morto sem que o original cumpra a especificação. Sobrevivência sozinha não prova equivalência.
+`V(G) = E − N + 2 = 12 − 10 + 2 = P + 1 = 4`.
 
-## Como demonstrar a Sprint 4
+CT01, CT02, CT03 e CT04 formam quatro caminhos básicos independentes e cobrem todos os nós e arestas do modelo. Selecionar apenas CT01 reduz a cobertura. Remover um caso da seleção não apaga o catálogo: selecione novamente seu ID para executá-lo. Casos próprios podem ser adicionados e limpos na interface.
 
-1. Abra **Sprint 4 · Pitch e Validação**. Por padrão, os 13 casos do plano são executados. É possível escolher um subconjunto ou reutilizar a seleção da Sprint 2 com casos próprios.
-2. O resultado inicial é **9 PASS, 4 FAIL e nenhum caso pendente**. O CAD0001 é reprovado no plano por converter NULL em zero em vez de rejeitá-lo. A ferramenta está evidenciando uma falha do programa auditado.
-3. Na **Matriz RTM**, confira quatro requisitos definidos para este projeto: cálculo, zero válido, rejeição dos negativos e rejeição de NULL. A tabela reversa mostra os requisitos associados a cada teste e seu tipo de fluxo (principal, alternativo/limite ou exceção).
-4. Os quatro requisitos possuem testes executados, mas somente três são aprovados no plano. Requisito com caso FAIL é reprovado; com execução incompleta e sem FAIL fica parcial; sem caso executado fica sem execução. Ter um vínculo na matriz não significa aprovação.
-5. Remova um caso e observe as pendências. Selecionar apenas os casos que passam não aprova o plano: os demais ficam explicitamente não executados. A aprovação de cada requisito exige que todos os seus casos planejados sejam executados e passem.
-6. Baixe a RTM e as evidências em CSV e o relatório final em Markdown. Os números refletem a seleção atual, incluindo a cobertura estrutural, DU e mutação dessa mesma seleção.
-7. Em **Pitch e demonstração**, use o roteiro de aproximadamente três minutos, com problema, solução, demonstração, resultados e limites. O roteiro também pode ser baixado em Markdown.
+O original não tem OR de negativos nem retorno antecipado -1. Essas estruturas foram removidas do modelo. McCabe não prova ausência de defeitos e não determina universalmente o mínimo de testes para cobertura de arestas.
 
-A RTM aplica ao CAD0001 os conceitos de derivação de casos e rastreabilidade da aula de 14/10/2026. Os identificadores REQ-CAD são uma organização das regras neste projeto. O plano é limitado aos casos cadastrados e não constitui teste exaustivo ou validação do runtime 4GL. A divergência de NULL permanece preservada; esta sprint documenta o resultado, sem alterar o programa objeto de estudo.
+## Sprint 3 — DU e mutação
 
-## Testes
+Há **13 pares DU factíveis**, obtidos pelos oito fluxos NULL/não NULL. Os parâmetros são definidos na entrada e redefinidos apenas nos ramos NULL; o cálculo usa a última definição e o retorno usa o resultado. O critério é todos os pares DU factíveis, não todos os caminhos DU.
+
+Os dez mutantes agora alteram construções existentes no original: três operações aritméticas, três literais da normalização, uma remoção de termo, uma substituição de variável local, uma substituição de retorno e uma permutação equivalente. Não são gerados mutantes sobre uma guarda de negativos inexistente.
+
+M09 é equivalente por comutatividade. Os quatro casos básicos cobrem os 13 pares e matam os nove mutantes não equivalentes: escore `mortos/(total−equivalentes) = 9/(10−1) = 100%`. Só CT01 cobre sete pares e mata cinco mutantes (55,6%). Sobreviver não comprova equivalência.
+
+O oráculo de mutação compara o modelo original e suas variantes, no domínio Decimal Python. Essa comparação é separada do PASS/FAIL contra a regra funcional. As variantes não são compiladas em 4GL.
+
+## Sprint 4 — RTM, validação e pitch
+
+O plano completo tem **19 casos: 8 PASS, 11 FAIL, zero pendentes**. Os quatro requisitos têm testes executados e dois são aprovados no plano. A rejeição de negativos e a rejeição de NULL estão reprovadas, mesmo com 100% da cobertura estrutural, DU e mutação do catálogo.
+
+A RTM registra origem do requisito, critério adotado, casos, resultados e versão do alvo. Vínculo não significa aprovação. Remover casos da execução os deixa pendentes; selecionar somente casos verdes não aprova o plano completo. A seleção pode reutilizar os casos da Sprint 2, inclusive personalizados.
+
+Os CSVs, relatório final e roteiro do pitch refletem a seleção atual. O pitch explica os defeitos do original e os limites da evidência.
+
+## Escopo e limites
+
+- A execução é do **modelo Python instrumentado da função de cálculo**, não do fonte Informix-4GL. O grafo é explícito para essa versão; não há parser geral de 4GL.
+- O SHA-256 identifica o conteúdo normalizado para quebras LF, permitindo checkout em Windows/Linux. Alterar o texto, inclusive comentários, bloqueia as evidências locais e métricas das quatro sprints. Use **Restaurar fonte do arquivo** para voltar ao conteúdo salvo; o Gemini pode analisar texto alterado, sem associá-lo às métricas antigas.
+- Entradas têm até duas casas e magnitude máxima 9.999.999.999,99. Resultados que excedem o tipo ou exigem arredondamento são recusados pelo modelo, sem atribuição local de PASS/FAIL. É necessário validar esses casos no runtime nativo.
+- Obter -1 não demonstra sozinho uma rejeição: `(-1×2)+1` também dá -1 por aritmética. Os representantes negativos do plano evitam essa coincidência.
+- O original completo contém INSERT, UPDATE e DELETE em duas tabelas. Transações, COMMIT/ROLLBACK, restrições e menu não são executados nem estão incluídos nestas métricas; requerem testes de integração próprios.
+
+Veja [a revisão e os critérios de QA](docs/REVISAO_QA.md).
+
+## Testes automatizados da ferramenta
 
 ```powershell
-python -m unittest -v test_caixa_branca test_sprint3 test_sprint4 test_interface
+python -m unittest -v test_caixa_preta test_caixa_branca test_sprint3 test_sprint4 test_interface
 ```
 
-Os testes verificam 125 combinações contra uma referência matemática, consistência dos caminhos, curto-circuito, independência dos caminhos básicos, cobertura completa, divergência de NULL, validação de entradas e interações da interface. As chamadas ao Gemini nos testes são simuladas.
+Os 28 testes automatizados verificam leitura e identidade do original, épsilon por escala, regressão de negativos/NULL, limites do modelo, caminhos independentes, pares DU, mutantes, RTM, pendências, exportações e interação da interface. As chamadas Gemini são simuladas.
 
-Os testes da Sprint 3 também verificam o universo DU contra 216 combinações, as saídas conhecidas de cada mutante, o equivalente em 125 combinações (incluindo limites de entrada), o escore, suíte vazia e a seleção compartilhada/independente na interface.
-
-Os testes da Sprint 4 verificam RTM nos dois sentidos, classificação dos fluxos, reprovação de NULL mesmo com cobertura alta, pendências, suíte vazia, casos próprios, relatórios, roteiro e interações da interface. A suíte completa tem 20 testes automatizados.
+Os testes automatizados da ferramenta devem passar enquanto ela evidencia FAIL nos casos do programa auditado. São verificações de objetivos diferentes.

@@ -7,10 +7,10 @@ from sprint4 import REQUISITOS, validar, vinculos, relatorio, pitch
 class Sprint4Tests(unittest.TestCase):
     def test_plano_completo_nao_mascara_falhas_com_cobertura(self):
         dados = validar(CASOS)
-        self.assertEqual((dados['pass'], dados['fail'], dados['pendentes']), (9, 4, 0))
+        self.assertEqual((dados['pass'], dados['fail'], dados['pendentes']), (8, 11, 0))
         self.assertEqual(dados['veredito'], 'Reprovado no plano')
         self.assertEqual(dados['requisitos_vinculados'], 4)
-        self.assertEqual(dados['requisitos_aprovados'], 3)
+        self.assertEqual(dados['requisitos_aprovados'], 2)
         self.assertFalse(dados['orfaos'])
         self.assertEqual(dados['cobertura_nos'], 100)
         self.assertEqual(dados['cobertura_du'], 100)
@@ -18,6 +18,9 @@ class Sprint4Tests(unittest.TestCase):
         nulos = next(r for r in dados['matriz'] if r['Requisito'] == 'REQ-CAD04')
         self.assertEqual(nulos['Situação'], 'Reprovado')
         self.assertEqual(nulos['FAIL'], 'CT02, CT03, CT04, CT09')
+        negativos = next(r for r in dados['matriz'] if r['Requisito'] == 'REQ-CAD03')
+        self.assertEqual(negativos['Situação'], 'Reprovado')
+        self.assertEqual(negativos['FAIL'], 'CT05, CT06, CT07, CT10, CT11, CT12, CT13')
 
     def test_parcial_e_vazio_nao_aprovam_requisito(self):
         parcial = validar([CASOS[0]])
@@ -25,7 +28,7 @@ class Sprint4Tests(unittest.TestCase):
         self.assertEqual(parcial['requisitos_aprovados'], 0)
         self.assertEqual(parcial['matriz'][0]['Situação'], 'Parcial')
         vazio = validar([])
-        self.assertEqual((vazio['executados'], vazio['pendentes']), (0, 13))
+        self.assertEqual((vazio['executados'], vazio['pendentes']), (0, 19))
         self.assertEqual(vazio['requisitos_vinculados'], 0)
         self.assertIsNone(vazio['escore_mutacao'])
         self.assertTrue(all(r['Situação'] == 'Sem execução' for r in vazio['matriz']))
@@ -46,7 +49,7 @@ class Sprint4Tests(unittest.TestCase):
     def test_personalizados_e_ids_repetidos(self):
         extra = Caso('EX01', 'Cálculo nominal', ('2', '3', '4'))
         dados = validar([extra])
-        self.assertEqual((dados['pass'], dados['pendentes']), (1, 13))
+        self.assertEqual((dados['pass'], dados['pendentes']), (1, 19))
         self.assertIn('EX01', dados['matriz'][0]['PASS'])
         with self.assertRaises(ValueError):
             validar([extra, extra])
@@ -56,13 +59,16 @@ class Sprint4Tests(unittest.TestCase):
     def test_exportacao_e_pitch_correspondem_a_selecao(self):
         dados = validar(CASOS)
         texto = relatorio(dados)
-        self.assertIn('9 PASS, 4 FAIL', texto)
+        self.assertIn('8 PASS, 11 FAIL', texto)
         self.assertIn('REQ-CAD04', texto)
         self.assertIn('CT09', texto)
         self.assertIn('sem compilar 4GL', pitch(dados))
         vazio = validar([])
         self.assertIn('indefinido', relatorio(vazio))
-        self.assertIn('13 casos do plano ainda pendentes', pitch(vazio))
+        self.assertIn('19 casos do plano ainda pendentes', pitch(vazio))
+        self.assertIn(dados['sha256'], texto)
+        self.assertTrue(all(t['SHA-256 (LF)'] == dados['sha256'] for t in dados['testes']))
+        self.assertTrue(all(r['Origem / critério'] for r in dados['matriz']))
 
 
 if __name__ == '__main__':

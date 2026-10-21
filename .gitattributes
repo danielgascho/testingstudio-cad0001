@@ -1,0 +1,2 @@
+# Preserve the supplied audit fixture, including its original whitespace and line endings.
+cad0001_item_calculo.txt -text -whitespace

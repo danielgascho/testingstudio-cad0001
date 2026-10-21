@@ -1,27 +1,27 @@
-"""Modelo executável do CAD0001 para estudo de cobertura, sem executar 4GL."""
+"""Modelo instrumentado da função de cálculo ORIGINAL, sem executar Informix-4GL."""
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 
 NOS = {
-    'INICIO': 'Entrada da função',
-    'N1': 'val_param1 IS NULL?', 'N2': 'p_val1 = 0', 'N3': 'p_val1 = val_param1',
-    'N4': 'val_param2 IS NULL?', 'N5': 'p_val2 = 0', 'N6': 'p_val2 = val_param2',
-    'N7': 'val_param3 IS NULL?', 'N8': 'p_val3 = 0', 'N9': 'p_val3 = val_param3',
-    'N10': 'p_val1 < 0?', 'N11': 'p_val2 < 0?', 'N12': 'p_val3 < 0?',
-    'N13': 'RETURN -1', 'N14': 'resultado = (p_val1 * p_val2) + p_val3',
-    'N15': 'RETURN resultado', 'FIM': 'Saída da função',
+    'INICIO': 'Entrada: p_val1, p_val2, p_val3',
+    'N1': 'p_val1 IS NULL?', 'N2': 'p_val1 = 0',
+    'N3': 'p_val2 IS NULL?', 'N4': 'p_val2 = 0',
+    'N5': 'p_val3 IS NULL?', 'N6': 'p_val3 = 0',
+    'N7': 'l_val_calculado = (p_val1 * p_val2) + p_val3',
+    'N8': 'RETURN l_val_calculado', 'FIM': 'Saída da função',
 }
 ARESTAS = (
-    ('INICIO', 'N1', ''), ('N1', 'N2', 'V'), ('N1', 'N3', 'F'),
-    ('N2', 'N4', ''), ('N3', 'N4', ''), ('N4', 'N5', 'V'), ('N4', 'N6', 'F'),
-    ('N5', 'N7', ''), ('N6', 'N7', ''), ('N7', 'N8', 'V'), ('N7', 'N9', 'F'),
-    ('N8', 'N10', ''), ('N9', 'N10', ''), ('N10', 'N13', 'V'), ('N10', 'N11', 'F'),
-    ('N11', 'N13', 'V'), ('N11', 'N12', 'F'), ('N12', 'N13', 'V'), ('N12', 'N14', 'F'),
-    ('N13', 'FIM', ''), ('N14', 'N15', ''), ('N15', 'FIM', ''),
+    ('INICIO', 'N1', ''), ('N1', 'N2', 'V'), ('N1', 'N3', 'F'), ('N2', 'N3', ''),
+    ('N3', 'N4', 'V'), ('N3', 'N5', 'F'), ('N4', 'N5', ''),
+    ('N5', 'N6', 'V'), ('N5', 'N7', 'F'), ('N6', 'N7', ''),
+    ('N7', 'N8', ''), ('N8', 'FIM', ''),
 )
-DECISOES = frozenset({'N1', 'N4', 'N7', 'N10', 'N11', 'N12'})
+DECISOES = frozenset({'N1', 'N3', 'N5'})
+COMPLEXIDADE = len(ARESTAS) - len(NOS) + 2
+MAXIMO = Decimal('9999999999.99')
+EPSILON = Decimal('0.01')
 
 
 @dataclass(frozen=True)
@@ -37,16 +37,26 @@ CASOS = (
     Caso('CT02', 'NULL no parâmetro 1', (None, '100', '100'), True),
     Caso('CT03', 'NULL no parâmetro 2', ('100', None, '100'), True),
     Caso('CT04', 'NULL no parâmetro 3', ('100', '100', None), True),
-    Caso('CT05', 'Negativo no parâmetro 1', ('-0.01', '100', '100'), True),
-    Caso('CT06', 'Negativo no parâmetro 2', ('100', '-0.01', '100'), True),
-    Caso('CT07', 'Negativo no parâmetro 3', ('100', '100', '-0.01'), True),
+    Caso('CT05', 'Off-point no parâmetro 1', ('-0.01', '100', '100')),
+    Caso('CT06', 'Off-point no parâmetro 2', ('100', '-0.01', '100')),
+    Caso('CT07', 'Off-point no parâmetro 3', ('100', '100', '-0.01')),
     Caso('CT08', 'Todos zero', ('0', '0', '0')),
     Caso('CT09', 'Todos NULL', (None, None, None)),
-    Caso('CT10', 'Todos negativos', ('-0.01', '-0.01', '-0.01')),
+    Caso('CT10', 'Todos negativos (resultado representável)', ('-1', '-1', '-1')),
     Caso('CT11', 'Exterior no parâmetro 1', ('-100', '100', '100')),
     Caso('CT12', 'Exterior no parâmetro 2', ('100', '-100', '100')),
     Caso('CT13', 'Exterior no parâmetro 3', ('100', '100', '-100')),
+    Caso('CT14', 'On-point no parâmetro 1', ('0', '100', '100')),
+    Caso('CT15', 'On-point no parâmetro 2', ('100', '0', '100')),
+    Caso('CT16', 'On-point no parâmetro 3', ('100', '100', '0')),
+    Caso('CT17', 'Vizinho válido no parâmetro 1', ('0.01', '100', '100')),
+    Caso('CT18', 'Vizinho válido no parâmetro 2', ('100', '0.01', '100')),
+    Caso('CT19', 'Vizinho válido no parâmetro 3', ('100', '100', '0.01')),
 )
+
+
+class LimiteModelo(ValueError):
+    """O resultado exige semântica de arredondamento/overflow do runtime nativo."""
 
 
 def ler_valor(texto):
@@ -54,8 +64,8 @@ def ler_valor(texto):
         return None
     try:
         valor = Decimal(str(texto).strip().replace(',', '.'))
-        if (not valor.is_finite() or abs(valor) > Decimal('9999999999.99')
-                or valor != valor.quantize(Decimal('0.01'))):
+        if (not valor.is_finite() or abs(valor) > MAXIMO
+                or valor != valor.quantize(EPSILON)):
             raise ValueError
         return valor
     except (InvalidOperation, ValueError):
@@ -63,30 +73,28 @@ def ler_valor(texto):
 
 
 def executar(entradas):
-    """Preserva NULL→0 e registra o OR com curto-circuito da versão Python."""
+    """Reproduz as três decisões de NULL; não acrescenta rejeição de negativos."""
     if len(entradas) != 3:
         raise ValueError('São necessários três parâmetros.')
     valores = tuple(ler_valor(v) for v in entradas)
     caminho = ['INICIO']
     normalizados = []
-    for valor, decisao, nulo, copia in zip(valores, ['N1', 'N4', 'N7'], ['N2', 'N5', 'N8'], ['N3', 'N6', 'N9']):
-        caminho.extend([decisao, nulo if valor is None else copia])
-        normalizados.append(Decimal('0') if valor is None else valor)
-    resultado = None
-    for valor, decisao in zip(normalizados, ['N10', 'N11', 'N12']):
+    for valor, decisao, nulo in zip(valores, ['N1', 'N3', 'N5'], ['N2', 'N4', 'N6']):
         caminho.append(decisao)
-        if valor < 0:
-            caminho.append('N13')
-            resultado = Decimal('-1')
-            break
-    if resultado is None:
-        caminho.extend(['N14', 'N15'])
-        resultado = normalizados[0] * normalizados[1] + normalizados[2]
-    caminho.append('FIM')
+        if valor is None:
+            caminho.append(nulo)
+        normalizados.append(Decimal('0') if valor is None else valor)
+    resultado = normalizados[0] * normalizados[1] + normalizados[2]
+    if abs(resultado) > MAXIMO or resultado != resultado.quantize(EPSILON):
+        raise LimiteModelo('Este cálculo exige arredondamento ou excede DECIMAL(12,2). Valide no runtime Informix; o modelo não atribui PASS/FAIL nesse caso.')
+    caminho.extend(['N7', 'N8', 'FIM'])
     return resultado, tuple(caminho)
 
 
 def esperado_especificacao(entradas):
+    """Oráculo funcional independente: rejeitar negativos e NULL (sentinela -1 adotada)."""
+    if len(entradas) != 3:
+        raise ValueError('São necessários três parâmetros.')
     valores = tuple(ler_valor(v) for v in entradas)
     if any(v is None or v < 0 for v in valores):
         return Decimal('-1')

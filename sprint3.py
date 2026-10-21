@@ -7,15 +7,12 @@ from itertools import product
 from caixa_branca import executar, ler_valor
 
 
-# As entradas são definidas na entrada da função; atribuições locais redefinem p_val.
-DEFINICOES = {'INICIO': ('val_param1', 'val_param2', 'val_param3'),
-              'N2': ('p_val1',), 'N3': ('p_val1',),
-              'N5': ('p_val2',), 'N6': ('p_val2',),
-              'N8': ('p_val3',), 'N9': ('p_val3',), 'N14': ('resultado',)}
-C_USOS = {'N3': ('val_param1',), 'N6': ('val_param2',), 'N9': ('val_param3',),
-          'N14': ('p_val1', 'p_val2', 'p_val3'), 'N15': ('resultado',)}
-P_USOS = {'N1': 'val_param1', 'N4': 'val_param2', 'N7': 'val_param3',
-          'N10': 'p_val1', 'N11': 'p_val2', 'N12': 'p_val3'}
+# No original, os próprios parâmetros são redefinidos quando recebem NULL.
+DEFINICOES = {'INICIO': ('p_val1', 'p_val2', 'p_val3'),
+              'N2': ('p_val1',), 'N4': ('p_val2',), 'N6': ('p_val3',),
+              'N7': ('l_val_calculado',)}
+C_USOS = {'N7': ('p_val1', 'p_val2', 'p_val3'), 'N8': ('l_val_calculado',)}
+P_USOS = {'N1': 'p_val1', 'N3': 'p_val2', 'N5': 'p_val3'}
 
 
 @dataclass(frozen=True, order=True)
@@ -36,16 +33,15 @@ def pares_do_caminho(caminho):
         if no in P_USOS:
             variavel = P_USOS[no]
             pares.add(ParDU(variavel, ultimas[variavel], f'{no} → {caminho[indice + 1]}', 'p-uso'))
-        # Em N14 os operandos são usados antes de definir o resultado.
+        # Em N7 os operandos são usados antes de definir o resultado.
         for variavel in DEFINICOES.get(no, ()):
             ultimas[variavel] = no
     return frozenset(pares)
 
 
 def universo_du():
-    # Toda decisão deste modelo depende apenas de NULL, negativo ou não negativo.
-    # Os 27 representantes cobrem todas as combinações dessas três classes.
-    return frozenset(par for entrada in product((None, '-0.01', '0'), repeat=3)
+    # As três decisões dependem somente de NULL/não NULL: 2³ = 8 fluxos.
+    return frozenset(par for entrada in product((None, '100'), repeat=3)
                      for par in pares_do_caminho(executar(entrada)[1]))
 
 
@@ -70,17 +66,17 @@ class Mutante:
 
 
 MUTANTES = (
-    Mutante('M01', 'ROR', 'p_val1 < 0', 'p_val1 <= 0'),
-    Mutante('M02', 'ROR', 'p_val2 < 0', 'p_val2 <= 0'),
-    Mutante('M03', 'ROR', 'p_val3 < 0', 'p_val3 <= 0'),
-    Mutante('M04', 'AOR', '(p_val1 * p_val2) + p_val3', '(p_val1 + p_val2) + p_val3'),
-    Mutante('M05', 'AOR', '(p_val1 * p_val2) + p_val3', '(p_val1 * p_val2) - p_val3'),
-    Mutante('M06', 'COR', '(negativo1 OR negativo2) OR negativo3', '(negativo1 AND negativo2) OR negativo3'),
-    Mutante('M07', 'LVR', 'NULL no parâmetro 1 → 0', 'NULL no parâmetro 1 → 1'),
-    Mutante('M08', 'LVR', 'RETURN -1 ao rejeitar', 'RETURN 0 ao rejeitar'),
+    Mutante('M01', 'AOR', '(p_val1 * p_val2) + p_val3', '(p_val1 + p_val2) + p_val3'),
+    Mutante('M02', 'AOR', '(p_val1 * p_val2) + p_val3', '(p_val1 * p_val2) - p_val3'),
+    Mutante('M03', 'Substituição de literal', 'NULL no parâmetro 1 → 0', 'NULL no parâmetro 1 → 1'),
+    Mutante('M04', 'Substituição de literal', 'NULL no parâmetro 2 → 0', 'NULL no parâmetro 2 → 1'),
+    Mutante('M05', 'Substituição de literal', 'NULL no parâmetro 3 → 0', 'NULL no parâmetro 3 → 1'),
+    Mutante('M06', 'Remoção de termo', '(p_val1 * p_val2) + p_val3', 'p_val1 * p_val2'),
+    Mutante('M07', 'LVR (variável local)', '(p_val1 * p_val2) + p_val3', '(p_val1 * p_val3) + p_val3'),
+    Mutante('M08', 'Substituição de retorno', 'RETURN l_val_calculado', 'RETURN 0'),
     Mutante('M09', 'Permutação de operandos', 'p_val1 * p_val2', 'p_val2 * p_val1',
-            'A multiplicação de Decimal é comutativa neste domínio. As demais operações e validações são idênticas.'),
-    Mutante('M10', 'Remoção de termo', '(p_val1 * p_val2) + p_val3', 'p_val1 * p_val2'),
+            'A multiplicação de Decimal é comutativa no domínio deste modelo. As demais etapas são idênticas.'),
+    Mutante('M10', 'AOR', '(p_val1 * p_val2) + p_val3', '(p_val1 * p_val2) * p_val3'),
 )
 
 
@@ -91,20 +87,23 @@ def executar_mutante(entradas, id_mutante):
         raise ValueError('São necessários três parâmetros.')
     valores = [ler_valor(v) for v in entradas]
     p = [Decimal('0') if v is None else v for v in valores]
-    if id_mutante == 'M07' and valores[0] is None:
-        p[0] = Decimal('1')
-    negativos = [v <= 0 if id_mutante == f'M0{i + 1}' else v < 0 for i, v in enumerate(p)]
-    rejeitar = ((negativos[0] and negativos[1]) or negativos[2]) if id_mutante == 'M06' else any(negativos)
-    if rejeitar:
-        return Decimal('0') if id_mutante == 'M08' else Decimal('-1')
-    if id_mutante == 'M04':
+    for i in range(3):
+        if id_mutante == f'M0{i + 3}' and valores[i] is None:
+            p[i] = Decimal('1')
+    if id_mutante == 'M01':
         return p[0] + p[1] + p[2]
-    if id_mutante == 'M05':
+    if id_mutante == 'M02':
         return p[0] * p[1] - p[2]
+    if id_mutante == 'M06':
+        return p[0] * p[1]
+    if id_mutante == 'M07':
+        return p[0] * p[2] + p[2]
+    if id_mutante == 'M08':
+        return Decimal('0')
     if id_mutante == 'M09':
         return p[1] * p[0] + p[2]
     if id_mutante == 'M10':
-        return p[0] * p[1]
+        return p[0] * p[1] * p[2]
     return p[0] * p[1] + p[2]
 
 
